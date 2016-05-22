@@ -11,11 +11,9 @@ static idtr __idtr;
 // default "null" interrupt handler
 static void __default_int_handler_null()
 {
-    INT_ROUTINE_BEGIN();
-
     Console::WriteLn("Unhandled interrupt");
 
-    INT_ROUTINE_END();
+    halt();
 }
 
 // installs interrupt handler to IDT (be sure to disable interrupts before calling this function, and enable them afterwards)

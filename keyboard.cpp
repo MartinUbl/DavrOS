@@ -3,6 +3,7 @@
 #include "idt.h"
 #include "support.h"
 #include "keymap.h"
+#include "irq_handlers.h"
 
 #include "console.h"
 
@@ -84,10 +85,8 @@ void KeyboardHandler::SignalScancode(char scancode)
 }
 
 // keyboard IRQ1 handler
-static void __keyboard_irq_handler()
+extern "C" void __keyboard_irq_handler()
 {
-    INT_ROUTINE_BEGIN();
-
     // read scancode
     char scancode = inb(KEYBOARD_DATA_PORT);
     // send it to keyboard handler
@@ -95,8 +94,6 @@ static void __keyboard_irq_handler()
 
     // acknowledge PIC about interrupt being handled
     send_eoi(0);
-
-    INT_ROUTINE_END();
 }
 
 char KeyboardHandler::AwaitKey()
@@ -207,7 +204,7 @@ void KeyboardHandler::Initialize()
     m_keyboard_buffer_ptr = 0;
 
     // hook IRQ 1
-    __use_irq(1, __keyboard_irq_handler);
+    __use_irq(1, handle_keyboard_irq);
 
     // enable keyboard IRQ 1
     __enable_irq(1);

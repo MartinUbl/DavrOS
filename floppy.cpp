@@ -3,6 +3,7 @@
 #include "idt.h"
 #include "support.h"
 #include "pit.h"
+#include "irq_handlers.h"
 
 #include "console.h"
 
@@ -66,15 +67,11 @@ void FloppyHandler::ResetIRQState()
 }
 
 // floppy IRQ6 handler
-static void __floppy_irq_handler()
+extern "C" void __floppy_irq_handler()
 {
-    INT_ROUTINE_BEGIN();
-
     sFloppy.ResetIRQState();
 
     send_eoi(6);
-
-    INT_ROUTINE_END();
 }
 
 void FloppyHandler::MotorOn()
@@ -547,7 +544,7 @@ int FloppyHandler::Initialize()
 {
     m_floppy_status = 0;
 
-    __use_irq(6, __floppy_irq_handler);
+    __use_irq(6, handle_floppy_irq);
 
     // enable IRQ 6
     __enable_irq(6);

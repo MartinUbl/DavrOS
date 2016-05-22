@@ -10,14 +10,6 @@
 #define I86_IDT_DESC_RING3      0x60
 #define I86_IDT_DESC_PRESENT    0x80
 
-// this should be at every interrupt routine start
-#define INT_ROUTINE_BEGIN() int_disable()
-// this shoulw be at every interrupt routine end
-#define INT_ROUTINE_END() int_enable(); \
-    asm("mov %ebp, %esp"); \
-    asm("pop %ebp"); \
-    asm("iret");
-
 typedef void (*int_handler)(void);
 
 // IDT descriptor record

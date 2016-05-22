@@ -2,6 +2,7 @@
 #include "idt.h"
 #include "pic.h"
 #include "support.h"
+#include "irq_handlers.h"
 
 // internal PIT tick counter
 static unsigned int __pit_counter = 0;
@@ -43,22 +44,18 @@ void wait_ticks(unsigned int cnt)
 }
 
 // PIT IRQ handling routine
-static void __pit_int_handler()
+extern "C" void __pit_irq_handler()
 {
-    INT_ROUTINE_BEGIN();
-
     // increment counter
     __pit_counter++;
 
     send_eoi(0);
-
-    INT_ROUTINE_END();
 }
 
 void __init_pit()
 {
     // hook PIT handler, IRQ0
-    __use_irq(0, __pit_int_handler);
+    __use_irq(0, handle_pit_irq);
 
     // reset counter
     __pit_counter = 0;
