@@ -1,4 +1,4 @@
-#include "framebuffer.h"
+#include "console.h"
 #include "gdt.h"
 #include "idt.h"
 #include "pic.h"
@@ -8,72 +8,101 @@
 #include "shell.h"
 #include "floppy.h"
 
+extern "C" void (*__CTOR_LIST__)();
+
+extern "C" void call_constructors()
+{
+    void (**constructor)() = &__CTOR_LIST__;
+    int total = *(int *)constructor;
+    constructor++;
+    while (total)
+    {
+        (*constructor)();
+        total--;
+        constructor++;
+    }
+}
+
+extern "C" void __dso_handle()
+{
+    // ignore dtors for now
+}
+
+extern "C" void __cxa_atexit()
+{
+    // ignore dtors for now
+}
+
 // kernel panic - print message and halt CPU
 static void __panic()
 {
-    echo("Kernel panic, halting machine");
+    Console::WriteLn("Kernel panic, halting machine");
     halt();
 }
 
 // kernel entry point
 extern "C" void kernel_loader_med()
 {
+    call_constructors();
+
     // clear screen, put some nice messages
-	clearscreen();
-	echo("DavrOS v0.1\n");
-	echo("Educational project\n\n");
+	Console::Clear();
+	Console::WriteLn("DavrOS v0.1");
+	Console::WriteLn("Educational project\n");
 
     // initiate kernel load routine
 
 	int_disable();
 
     // init GDT
-    echo("Initializing GDT... ");
+    Console::Write("Initializing GDT... ");
     if (__init_gdt() != 0)
     {
-        echo("ERROR\n");
+        Console::WriteLn("ERROR");
         __panic();
     }
-    echo("OK\n");
+    Console::WriteLn("OK");
 
     // init IDT
-    echo("Initializing IDT... ");
+    Console::Write("Initializing IDT... ");
     if (__init_idt() != 0)
     {
-        echo("ERROR\n");
+        Console::WriteLn("ERROR");
         __panic();
     }
-    echo("OK\n");
+    Console::WriteLn("OK");
 
     // init PIC
-    echo("Initializing PIC... ");
+    Console::Write("Initializing PIC... ");
     if (__init_pic() != 0)
     {
-        echo("ERROR\n");
+        Console::WriteLn("ERROR");
         __panic();
     }
-    echo("OK\n");
+    Console::WriteLn("OK");
 
     // init timer (PIT)
-    echo("Initializing PIT... ");
+    Console::Write("Initializing PIT... ");
     __init_pit();
-    echo("OK\n");
+    Console::WriteLn("OK");
 
     // init keyboard driver
-    echo("Initializing keyboard... ");
-    __init_keyboard();
-    echo("OK\n");
+    Console::Write("Initializing keyboard... ");
+    sKeyboard.Initialize();
+    Console::WriteLn("OK");
 
     // we are done with interrupt-sensitive work
     int_enable();
 
     // init floppy driver
-    echo("Initializing floppy driver... ");
-    if (__init_floppy() != 0)
-        echo("ERROR\n");
+    Console::Write("Initializing floppy driver... ");
+    if (sFloppy.Initialize() != 0)
+        Console::WriteLn("ERROR");
     else
-        echo("OK\n");
+        Console::WriteLn("OK");
 
     // run shell
-    run_shell();
+    DefaultShell shell;
+
+    shell.Run();
 }

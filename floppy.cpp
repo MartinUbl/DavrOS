@@ -4,17 +4,9 @@
 #include "support.h"
 #include "pit.h"
 
-#include "framebuffer.h"
+#include "console.h"
 
-// IRQ status
-static int __floppy_status = 0;
-
-// current absolute offset
-static int __floppy_current_offset = 0;
-// current track
-static int __floppy_current_track = 0;
-// current offset within one track
-static int __floppy_current_track_offset = 0;
+FloppyHandler sFloppy;
 
 // seek status
 static const char* __floppy_seek_status[] = { "normal", "error", "invalid", "drive" };
@@ -39,30 +31,38 @@ static const char* __floppy_drive_invalid_slot = "Invalid floppy slot";
 // invalid drive text
 static const char* __floppy_drive_unknown = "Unknown floppy drive";
 
-// stored floppy drive types
-static int __floppy_drives_present[2];
+FloppyHandler::FloppyHandler()
+{
+    m_floppy_status = 0;
+    m_floppy_current_offset = 0;
+    m_floppy_current_track = 0;
+    m_floppy_current_track_offset = 0;
+}
 
-// detects floppy drives present in system
-static void __floppy_detect()
+void FloppyHandler::DetectDrives()
 {
     unsigned char c;
     outb(0x70, 0x10);
     c = inb(0x71);
 
-    __floppy_drives_present[0] = c >> 4;
-    __floppy_drives_present[1] = c & 0xF;
+    m_floppy_drives_present[0] = c >> 4;
+    m_floppy_drives_present[1] = c & 0xF;
 }
 
-// retrieves floppy drive type
-const char* get_floppy_type(int slot)
+const char* FloppyHandler::GetFloppyDriveType(int slot)
 {
     if (slot < 0 || slot > 1)
         return __floppy_drive_invalid_slot;
 
-    if (__floppy_drives_present[slot] < 0 || __floppy_drives_present[slot] >= MAX_FLOPPY_TYPES)
+    if (m_floppy_drives_present[slot] < 0 || m_floppy_drives_present[slot] >= MAX_FLOPPY_TYPES)
         return __floppy_drive_unknown;
 
-    return __floppy_drive_types[__floppy_drives_present[slot]];
+    return __floppy_drive_types[m_floppy_drives_present[slot]];
+}
+
+void FloppyHandler::ResetIRQState()
+{
+    m_floppy_status = 0;
 }
 
 // floppy IRQ6 handler
@@ -70,27 +70,24 @@ static void __floppy_irq_handler()
 {
     INT_ROUTINE_BEGIN();
 
-    __floppy_status = 0;
+    sFloppy.ResetIRQState();
 
     send_eoi(6);
 
     INT_ROUTINE_END();
 }
 
-// start floppy motor
-static void __floppy_motor_on()
+void FloppyHandler::MotorOn()
 {
    outb(FLOPPY_DOR_PORT, 0x1C);
 }
 
-// stop floppy motor
-static void __floppy_motor_off()
+void FloppyHandler::MotorOff()
 {
    outb(FLOPPY_DOR_PORT, 0x00);
 }
 
-// send command to floppy
-static void __floppy_write_cmd(char cmd)
+void FloppyHandler::WriteCmd(char cmd)
 {
     int i;
 
@@ -105,13 +102,11 @@ static void __floppy_write_cmd(char cmd)
         }
     }
 
-    echo("floppy_write_cmd: timeout\n");
+    Console::WriteLn("floppy_write_cmd: timeout");
 }
 
-// reads data from floppy
-unsigned char __floppy_read_data()
+unsigned char FloppyHandler::ReadData()
 {
-
     int i;
 
     // max. 5 seconds timeout
@@ -122,155 +117,148 @@ unsigned char __floppy_read_data()
             return inb(FLOPPY_FIFO_PORT);
     }
 
-    echo("floppy_read_data: timeout\n");
+    Console::WriteLn("floppy_read_data: timeout");
     return 0;
 }
 
-// sends data to floppy and awaits status bytes
-static void __floppy_check_interrupt(int *st0, int *cyl)
+void FloppyHandler::CheckInterrupt(int *st0, int *cyl)
 {
-    __floppy_write_cmd(FLOPPY_CMD_SENSE_INTERRUPT);
+    WriteCmd(FLOPPY_CMD_SENSE_INTERRUPT);
 
-    *st0 = __floppy_read_data();
-    *cyl = __floppy_read_data();
+    *st0 = ReadData();
+    *cyl = ReadData();
 }
 
-// seek to specified cylinder on specified head
-static int __floppy_seek(int cyli, int head)
+int FloppyHandler::Seek(int cyli, int head)
 {
     int i, st0, cyl; // set to bogus cylinder
 
-    __floppy_motor_on();
+    MotorOn();
 
     for (i = 0; i < 10; i++)
     {
         // set flag to 1
-        __floppy_status = 1;
+        m_floppy_status = 1;
 
         // move to desired cylinder
-        __floppy_write_cmd(FLOPPY_CMD_SEEK);
+        WriteCmd(FLOPPY_CMD_SEEK);
         // 1. byte - bit 0,1 = drive, bit 2 = head
-        __floppy_write_cmd(head << 2);
+        WriteCmd(head << 2);
         // 2. byte - cylinder number
-        __floppy_write_cmd(cyli);
+        WriteCmd(cyli);
 
         // wait for interrupt
-        while (__floppy_status == 1)
+        while (m_floppy_status == 1)
         {
-            while (__floppy_status == 1)
+            while (m_floppy_status == 1)
                 ;
         }
-        __floppy_check_interrupt(&st0, &cyl);
+        CheckInterrupt(&st0, &cyl);
 
         // not ready
         if (st0 & 0xC0)
         {
-            echo("floppy_seek: status = ");
-            echo(__floppy_seek_status[st0 >> 6]);
-            echo("\n");
+            Console::Write("floppy_seek: status = ");
+            Console::WriteLn(__floppy_seek_status[st0 >> 6]);
             continue;
         }
 
         // have we reached desired cylinder?
         if (cyl == cyli)
         {
-            __floppy_motor_off();
+            MotorOff();
             return 0;
         }
 
     }
 
-    echo("floppy_seek: 10 retries exhausted\n");
-    __floppy_motor_off();
+    Console::WriteLn("floppy_seek: 10 retries exhausted");
+    MotorOff();
     return -1;
 }
 
-// calibrates floppy, seeks to sector 0
-static int __floppy_calibrate()
+int FloppyHandler::Calibrate()
 {
     int i, st0, cyl = -1;
 
-    __floppy_motor_on();
+    MotorOn();
 
     // 10 attempts to calibrate
     for (i = 0; i < 10; i++)
     {
         // set flag to 1
-        __floppy_status = 1;
+        m_floppy_status = 1;
 
         // move head to cylinder 0
-        __floppy_write_cmd(FLOPPY_CMD_RECALIBRATE);
-        __floppy_write_cmd(0); // argument is drive, we only support 0
+        WriteCmd(FLOPPY_CMD_RECALIBRATE);
+        WriteCmd(0); // argument is drive, we only support 0
 
         // wait for interrupt
-        while (__floppy_status == 1)
+        while (m_floppy_status == 1)
         {
-            while (__floppy_status == 1)
+            while (m_floppy_status == 1)
                 ;
         }
-        __floppy_check_interrupt(&st0, &cyl);
+        CheckInterrupt(&st0, &cyl);
 
         // not ready, device busy, missing or failing
         if (st0 & 0xC0)
         {
-            echo("floppy_calibrate: status = ");
-            echo(__floppy_seek_status[st0 >> 6]);
-            echo("\n");
+            Console::Write("floppy_calibrate: status = ");
+            Console::WriteLn(__floppy_seek_status[st0 >> 6]);
             continue;
         }
 
         // found cylinder 0 ? then we are done
         if (!cyl)
         {
-            __floppy_motor_off();
+            MotorOff();
             return 0;
         }
     }
 
-    echo("floppy_calibrate: 10 retries exhausted\n");
-    __floppy_motor_off();
+    Console::WriteLn("floppy_calibrate: 10 retries exhausted");
+    MotorOff();
     return -1;
 }
 
-// resets floppy state (at startup)
-static int __floppy_reset()
+int FloppyHandler::Reset()
 {
     int st0, cyl;
 
     // set the flag
-    __floppy_status = 1;
+    m_floppy_status = 1;
 
     // send reset bytes
     outb(FLOPPY_DOR_PORT, 0x00);
     outb(FLOPPY_DOR_PORT, 0x0C);
 
     // wait for the interrupt
-    while (__floppy_status == 1)
+    while (m_floppy_status == 1)
     {
-        while (__floppy_status == 1)
+        while (m_floppy_status == 1)
             ;
     }
 
     // wait for interrupt
-    __floppy_check_interrupt(&st0, &cyl);
+    CheckInterrupt(&st0, &cyl);
 
     // transfer speed = 500kb/s
     outb(FLOPPY_CCR_PORT, 0x00);
 
     // reset steprate, unload time, load time, no-DMA
-    __floppy_write_cmd(FLOPPY_CMD_SPECIFY);
-    __floppy_write_cmd(0xDF);
-    __floppy_write_cmd(0x02);
+    WriteCmd(FLOPPY_CMD_SPECIFY);
+    WriteCmd(0xDF);
+    WriteCmd(0x02);
 
     // finally, recalibrate
-    if (__floppy_calibrate())
+    if (Calibrate())
         return -1;
 
     return 0;
 }
 
-// init DMA channel for floppy transfer; read = 1 for reading, 0 for writing
-static void __floppy_dma_init(int read)
+void FloppyHandler::DMAInit(int read)
 {
     unsigned char mode;
 
@@ -305,8 +293,7 @@ static void __floppy_dma_init(int read)
     outb(0x0a, 0x02);   // unmask chan 2
 }
 
-// reads/writes onto specific location using DMA
-static int __floppy_do_track(int cyl, int read)
+int FloppyHandler::DoTrack(int cyl, int read)
 {
     unsigned char cmd;
 
@@ -321,260 +308,254 @@ static int __floppy_do_track(int cyl, int read)
         cmd = FLOPPY_CMD_WRITE_DATA | flags;
 
     // seek both heads
-    if (__floppy_seek(cyl, 0) || __floppy_seek(cyl, 1))
+    if (Seek(cyl, 0) || Seek(cyl, 1))
         return -1;
 
     int i;
     // 20 retries
     for (i = 0; i < 20; i++)
     {
-        __floppy_motor_on();
+        MotorOn();
 
         // set the flag
-        __floppy_status = 1;
+        m_floppy_status = 1;
 
         // init dma for specified transfer mode
-        __floppy_dma_init(read);
+        DMAInit(read);
 
         wait_ticks(100);        // give some time (100ms) to settle after the seeks
 
-        __floppy_write_cmd(cmd);  // set above for current direction
-        __floppy_write_cmd(0);    // 0:0:0:0:0:HD:US1:US0 = head and drive
-        __floppy_write_cmd(cyl);  // cylinder
-        __floppy_write_cmd(0);    // first head (should match with above)
-        __floppy_write_cmd(1);    // first sector, strangely counts from 1
-        __floppy_write_cmd(2);    // bytes/sector, 128*2^x (x=2 -> 512)
-        __floppy_write_cmd(18);   // number of tracks to operate on
-        __floppy_write_cmd(0x1B); // GAP3 length, 27 is default for 3.5"
-        __floppy_write_cmd(0xFF); // data length (0xFF if B/S != 0)
+        WriteCmd(cmd);  // set above for current direction
+        WriteCmd(0);    // 0:0:0:0:0:HD:US1:US0 = head and drive
+        WriteCmd(cyl);  // cylinder
+        WriteCmd(0);    // first head (should match with above)
+        WriteCmd(1);    // first sector, strangely counts from 1
+        WriteCmd(2);    // bytes/sector, 128*2^x (x=2 -> 512)
+        WriteCmd(18);   // number of tracks to operate on
+        WriteCmd(0x1B); // GAP3 length, 27 is default for 3.5"
+        WriteCmd(0xFF); // data length (0xFF if B/S != 0)
 
         // wait for the interrupt
-        while (__floppy_status == 1)
+        while (m_floppy_status == 1)
         {
-            while (__floppy_status == 1)
+            while (m_floppy_status == 1)
                 ;
         }
 
         // first read status information
         unsigned char st0, st1, st2, /*rcy, rhe, rse,*/ bps;
-        st0 = __floppy_read_data();
-        st1 = __floppy_read_data();
-        st2 = __floppy_read_data();
+        st0 = ReadData();
+        st1 = ReadData();
+        st2 = ReadData();
         // skip additional cylinder/head/sector data
-        /*rcy = */__floppy_read_data();
-        /*rhe = */__floppy_read_data();
-        /*rse = */__floppy_read_data();
+        /*rcy = */ReadData();
+        /*rhe = */ReadData();
+        /*rse = */ReadData();
         // bytes per sector, should be what we programmed in
-        bps = __floppy_read_data();
+        bps = ReadData();
 
         int error = 0;
 
         if (st0 & 0xC0)
         {
-            echo("floppy_do_sector: status = ");
-            echo(__floppy_sector_status[st0 >> 6]);
-            echo("\n");
+            Console::Write("floppy_do_sector: status = ");
+            Console::WriteLn(__floppy_sector_status[st0 >> 6]);
             error = 1;
         }
         if (st1 & 0x80)
         {
-            echo("floppy_do_sector: end of cylinder\n");
+            Console::WriteLn("floppy_do_sector: end of cylinder");
             error = 1;
         }
         if (st0 & 0x08)
         {
-            echo("floppy_do_sector: drive not ready\n");
+            Console::WriteLn("floppy_do_sector: drive not ready");
             error = 1;
         }
         if (st1 & 0x20)
         {
-            echo("floppy_do_sector: CRC error\n");
+            Console::WriteLn("floppy_do_sector: CRC error");
             error = 1;
         }
         if (st1 & 0x10)
         {
-            echo("floppy_do_sector: controller timeout\n");
+            Console::WriteLn("floppy_do_sector: controller timeout");
             error = 1;
         }
         if (st1 & 0x04)
         {
-            echo("floppy_do_sector: no data found\n");
+            Console::WriteLn("floppy_do_sector: no data found");
             error = 1;
         }
         if ((st1|st2) & 0x01)
         {
-            echo("floppy_do_sector: no address mark found\n");
+            Console::WriteLn("floppy_do_sector: no address mark found");
             error = 1;
         }
         if (st2 & 0x40)
         {
-            echo("floppy_do_sector: deleted address mark\n");
+            Console::WriteLn("floppy_do_sector: deleted address mark");
             error = 1;
         }
         if (st2 & 0x20)
         {
-            echo("floppy_do_sector: CRC error in data\n");
+            Console::WriteLn("floppy_do_sector: CRC error in data");
             error = 1;
         }
         if (st2 & 0x10)
         {
-            echo("floppy_do_sector: wrong cylinder\n");
+            Console::WriteLn("floppy_do_sector: wrong cylinder");
             error = 1;
         }
         if (st2 & 0x04)
         {
-            echo("floppy_do_sector: uPD765 sector not found\n");
+            Console::WriteLn("floppy_do_sector: uPD765 sector not found");
             error = 1;
         }
         if (st2 & 0x02)
         {
-            echo("floppy_do_sector: bad cylinder\n");
+            Console::WriteLn("floppy_do_sector: bad cylinder");
             error = 1;
         }
         if (bps != 0x2)
         {
-            echo("floppy_do_sector: wanted 512B/sector, got another\n");
+            Console::WriteLn("floppy_do_sector: wanted 512B/sector, got another");
             error = 1;
         }
         if (st1 & 0x02)
         {
-            echo("floppy_do_sector: not writable\n");
+            Console::WriteLn("floppy_do_sector: not writable");
             error = 2;
         }
 
         // no error = we successfully tracked to desired position
         if (!error)
         {
-            __floppy_motor_off();
+            MotorOff();
             return 0;
         }
 
         if(error > 1)
         {
-            echo("floppy_do_sector: fatal error occurred, not retrying\n");
-            __floppy_motor_off();
+            Console::WriteLn("floppy_do_sector: fatal error occurred, not retrying");
+            MotorOff();
             return -2;
         }
     }
 
-    echo("floppy_do_sector: 20 retries exhausted\n");
-    __floppy_motor_off();
+    Console::WriteLn("floppy_do_sector: 20 retries exhausted");
+    MotorOff();
     return -1;
 }
 
-// reads track into DMA buffer
-static int __floppy_read_track(int cyl)
+int FloppyHandler::ReadTrack(int cyl)
 {
-    return __floppy_do_track(cyl, 1);
+    return DoTrack(cyl, 1);
 }
 
-// writes track from DMA buffer
-static int __floppy_write_track(int cyl)
+int FloppyHandler::WriteTrack(int cyl)
 {
-    return __floppy_do_track(cyl, 0);
+    return DoTrack(cyl, 0);
 }
 
-// jumps to offset on floppy (does not seek now)
-int floppy_jump_to_offset(int offset)
+int FloppyHandler::SeekTo(int offset)
 {
     // maximum offset on 1.44M floppy
     if (offset >= 1509904)
         return -1;
 
-    __floppy_current_track = offset / FLOPPY_DMALEN;
-    __floppy_current_offset = offset;
-    __floppy_current_track_offset = offset % FLOPPY_DMALEN;
+    m_floppy_current_track = offset / FLOPPY_DMALEN;
+    m_floppy_current_offset = offset;
+    m_floppy_current_track_offset = offset % FLOPPY_DMALEN;
 
     return 0;
 }
 
-// reads bytes from current location on floppy
-int floppy_read_bytes(int count, char* target)
+int FloppyHandler::ReadBytes(char* target, int count)
 {
     int i;
 
     // read current track into DMA
-    __floppy_read_track(__floppy_current_track);
+    ReadTrack(m_floppy_current_track);
 
     // secure offset
-    if (__floppy_current_offset + count >= 1509904)
+    if (m_floppy_current_offset + count >= 1509904)
         return -1;
 
     // read while there's something to read
     for (i = 0; i < count; i++)
     {
         // copy from buffer
-        target[i] = floppy_dmabuf[__floppy_current_track_offset++];
+        target[i] = floppy_dmabuf[m_floppy_current_track_offset++];
 
         // if we are at the end of buffer
-        if (__floppy_current_track_offset >= FLOPPY_DMALEN)
+        if (m_floppy_current_track_offset >= FLOPPY_DMALEN)
         {
             // move to next track, reset offset, and read next track
-            __floppy_current_track++;
-            __floppy_current_track_offset = 0;
-            __floppy_read_track(__floppy_current_track);
+            m_floppy_current_track++;
+            m_floppy_current_track_offset = 0;
+            ReadTrack(m_floppy_current_track);
         }
 
         // move absolute offset
-        __floppy_current_offset++;
+        m_floppy_current_offset++;
     }
 
     return 0;
 }
 
-// writes bytes to current location on floppy
-int floppy_write_bytes(int count, char* source)
+int FloppyHandler::WriteBytes(char* source, int count)
 {
     int i;
 
     // read track to not lose data
-    __floppy_read_track(__floppy_current_track);
+    ReadTrack(m_floppy_current_track);
 
     // secure count
-    if (__floppy_current_offset + count >= 1509904)
+    if (m_floppy_current_offset + count >= 1509904)
         return -1;
 
     // write while there's something to write
     for (i = 0; i < count; i++)
     {
         // copy to DMA buffer
-        floppy_dmabuf[__floppy_current_track_offset++] = source[i];
+        floppy_dmabuf[m_floppy_current_track_offset++] = source[i];
 
         // if we are at the end of buffer
-        if (__floppy_current_track_offset >= FLOPPY_DMALEN)
+        if (m_floppy_current_track_offset >= FLOPPY_DMALEN)
         {
             // flush buffer to floppy
-            __floppy_write_track(__floppy_current_track);
+            WriteTrack(m_floppy_current_track);
             // move to next track, reset track offset
-            __floppy_current_track++;
-            __floppy_current_track_offset = 0;
+            m_floppy_current_track++;
+            m_floppy_current_track_offset = 0;
             // and refresh buffer data to not lose any
-            __floppy_read_track(__floppy_current_track);
+            ReadTrack(m_floppy_current_track);
         }
 
         // move to next
-        __floppy_current_offset++;
+        m_floppy_current_offset++;
     }
 
     // flush DMA buffer to floppy
-    __floppy_write_track(__floppy_current_track);
+    WriteTrack(m_floppy_current_track);
 
     return 0;
 }
 
-int __init_floppy()
+int FloppyHandler::Initialize()
 {
-    __floppy_status = 0;
+    m_floppy_status = 0;
 
     __use_irq(6, __floppy_irq_handler);
 
     // enable IRQ 6
     __enable_irq(6);
 
-    __floppy_detect();
+    DetectDrives();
 
     // reset floppy state
-    if (__floppy_reset() != 0)
+    if (Reset() != 0)
         return -1;
 
     return 0;

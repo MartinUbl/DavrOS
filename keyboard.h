@@ -13,20 +13,47 @@
 // caps lock flag
 #define KB_LED_CAPSLOCK     (unsigned char)0x04
 
-// is keyboard LED on?
-int __keyboard_is_led_on(unsigned char led);
-// cleas keyboard LED
-void __keyboard_clear_led(unsigned char led);
-// switch keyboard LED on
-void __keyboard_set_led(unsigned char led);
-// toggle keyboard LED
-void __keyboard_toggle_led(unsigned char led);
+// size of buffer for keyboard input
+#define KEYBOARD_BUFFER_SIZE 32
 
-// initializes and installs keyboard driver
-void __init_keyboard();
+class KeyboardHandler
+{
+    public:
+        KeyboardHandler();
 
-// flushes keyboard hardware and software buffer
-void __keyboard_flush_buffer();
+        void Initialize();
+
+        void SignalScancode(char scancode);
+
+        int IsLEDOn(unsigned char led);
+        void ToggleLED(unsigned char led);
+        void ClearLED(unsigned char led);
+        void SetLED(unsigned char led);
+        void FlushBuffer();
+
+        char AwaitKey();
+
+    protected:
+        unsigned char ConvertScancodeToCharacter(unsigned char scancode, int* pressed);
+        void UpdateLEDs();
+
+    private:
+        // is SHIFT being held?
+        int m_shift_on;
+        // is CTRL being held?
+        int m_ctrl_on;
+        // is ALT being held?
+        int m_alt_on;
+        // keyboard LEDs
+        int m_kb_state_lock;
+
+        // buffer for keyboard input
+        char m_keyboard_buffer[KEYBOARD_BUFFER_SIZE];
+        // index in keyboard buffer (first free position)
+        int m_keyboard_buffer_ptr;
+};
+
+extern KeyboardHandler sKeyboard;
 
 // reads string using keyboard input
 void gets(char* buffer, int maxlen);

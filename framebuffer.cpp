@@ -2,15 +2,17 @@
 #include "basic_io.h"
 #include "framebuffer.h"
 
-// framebuffer address
-static char* __framebuffer = (char*)(0x000B8000);
-// column for new output
-static int __cursor_col = 0;
-// row for new outputs
-static int __cursor_row = 0;
+Framebuffer sFramebuffer;
 
-// move cursor to raw position
-static void __move_cursor(unsigned short pos)
+Framebuffer::Framebuffer()
+{
+    m_cursor_row = 0;
+    m_cursor_col = 0;
+
+    m_framebuffer = (char*)FRAMEBUFFER_ADDRESS;
+}
+
+void Framebuffer::MoveCursor(unsigned short pos)
 {
 	outb(FB_COMMAND_PORT, FB_HIGH_BYTE_COMMAND);
 	outb(FB_DATA_PORT,    ((pos >> 8) & 0x00FF));
@@ -18,14 +20,12 @@ static void __move_cursor(unsigned short pos)
 	outb(FB_DATA_PORT,    pos & 0x00FF);
 }
 
-// updates cursor position according to __cursor_row and __cursor_col variables
-static void __update_cursor()
+void Framebuffer::UpdateCursor()
 {
-	__move_cursor(__cursor_row*FRAMEBUFFER_WIDTH + __cursor_col);
+	MoveCursor(m_cursor_row * FRAMEBUFFER_WIDTH + m_cursor_col);
 }
 
-// rolls framebuffer by one line higher
-static void __roll_framebuffer()
+void Framebuffer::Roll()
 {
     int i, j;
 
@@ -34,27 +34,26 @@ static void __roll_framebuffer()
     {
         for (j = 0; j < FRAMEBUFFER_WIDTH; j++)
         {
-            __framebuffer[i * FRAMEBUFFER_WIDTH * 2 + j * 2] = __framebuffer[(i+1) * FRAMEBUFFER_WIDTH * 2 + j * 2];
-            __framebuffer[i * FRAMEBUFFER_WIDTH * 2 + j * 2 + 1] = __framebuffer[(i+1) * FRAMEBUFFER_WIDTH * 2 + j * 2 + 1];
+            m_framebuffer[i * FRAMEBUFFER_WIDTH * 2 + j * 2] = m_framebuffer[(i+1) * FRAMEBUFFER_WIDTH * 2 + j * 2];
+            m_framebuffer[i * FRAMEBUFFER_WIDTH * 2 + j * 2 + 1] = m_framebuffer[(i+1) * FRAMEBUFFER_WIDTH * 2 + j * 2 + 1];
         }
     }
 
     // clear last line
     for (j = 0; j < FRAMEBUFFER_WIDTH; j++)
     {
-        __framebuffer[(FRAMEBUFFER_HEIGHT - 1) * FRAMEBUFFER_WIDTH * 2 + j * 2] = ' ';
-        __framebuffer[(FRAMEBUFFER_HEIGHT - 1) * FRAMEBUFFER_WIDTH * 2 + j * 2 + 1] = 0x07;
+        m_framebuffer[(FRAMEBUFFER_HEIGHT - 1) * FRAMEBUFFER_WIDTH * 2 + j * 2] = ' ';
+        m_framebuffer[(FRAMEBUFFER_HEIGHT - 1) * FRAMEBUFFER_WIDTH * 2 + j * 2 + 1] = 0x07;
     }
 }
 
-// puts character to specific location
-static void __putchar_raw(char c, int col, int row)
+void Framebuffer::PutChar_raw(char c, int col, int row)
 {
-	__framebuffer[row * FRAMEBUFFER_WIDTH * 2 + col * 2] = c;
-	__framebuffer[row * FRAMEBUFFER_WIDTH * 2 + col * 2 + 1] = 0x07;
+	m_framebuffer[row * FRAMEBUFFER_WIDTH * 2 + col * 2] = c;
+	m_framebuffer[row * FRAMEBUFFER_WIDTH * 2 + col * 2 + 1] = 0x07;
 }
 
-void putchar(char c)
+void Framebuffer::PutChar(char c)
 {
 	switch (c)
 	{
@@ -63,66 +62,66 @@ void putchar(char c)
             return;
         // newline - move cursor and reset column
 		case '\n':
-			__cursor_row++;
-			__cursor_col = 0;
+			m_cursor_row++;
+			m_cursor_col = 0;
 			// if we are below last line, roll framebuffer
-			if (__cursor_row == FRAMEBUFFER_HEIGHT)
+			if (m_cursor_row == FRAMEBUFFER_HEIGHT)
             {
-                __roll_framebuffer();
-                __cursor_row--;
+                Roll();
+                m_cursor_row--;
             }
-			__update_cursor();
+			UpdateCursor();
 			return;
         // backspace - erase character
         case '\b':
             // if at the beginning of line, move to the end of previous
-            if (__cursor_col == 0)
+            if (m_cursor_col == 0)
             {
                 // do not move back when on the first line
-                if (__cursor_row == 0)
+                if (m_cursor_row == 0)
                     return;
-                __cursor_col = FRAMEBUFFER_WIDTH - 1;
-                __cursor_row--;
+                m_cursor_col = FRAMEBUFFER_WIDTH - 1;
+                m_cursor_row--;
             }
             else // otherwise just move back by one character
             {
-                __cursor_col--;
+                m_cursor_col--;
             }
 
             // put empty character and update cursor
-            __putchar_raw(' ', __cursor_col, __cursor_row);
-            __update_cursor();
+            PutChar_raw(' ', m_cursor_col, m_cursor_row);
+            UpdateCursor();
 
             return;
 	}
 
     // put character
-	__putchar_raw(c, __cursor_col++, __cursor_row);
+	PutChar_raw(c, m_cursor_col++, m_cursor_row);
 	// if we moved too far to exceed line, move to next line and reset column
-	if (__cursor_col == FRAMEBUFFER_WIDTH)
+	if (m_cursor_col == FRAMEBUFFER_WIDTH)
 	{
-		__cursor_col = 0;
-		__cursor_row++;
+		m_cursor_col = 0;
+		m_cursor_row++;
 
         // if we are below last line, roll framebuffer
-		if (__cursor_row == FRAMEBUFFER_HEIGHT)
+		if (m_cursor_row == FRAMEBUFFER_HEIGHT)
 		{
-            __roll_framebuffer();
-            __cursor_row--;
+            Roll();
+            m_cursor_row--;
 		}
 	}
-	__update_cursor();
+	UpdateCursor();
 }
 
-void echo(const char* str)
+void Framebuffer::Echo(const char* str)
 {
 	int i = 0;
 	// write until we reach zero character
 	while (str[i] != '\0')
-		putchar(str[i++]);
+		PutChar(str[i++]);
 }
 
-void clearscreen()
+void Framebuffer::ClearScreen()
 {
 	int i, j;
 	// for each place in framebuffer, put empty character
@@ -130,11 +129,11 @@ void clearscreen()
 	{
 		for (j = 0; j < FRAMEBUFFER_HEIGHT; j++)
 		{
-			__putchar_raw(' ', i, j);
+			PutChar_raw(' ', i, j);
 		}
 	}
 	// reset cursor position
-	__cursor_row = 0;
-	__cursor_col = 0;
-	__move_cursor(0);
+	m_cursor_row = 0;
+	m_cursor_col = 0;
+	MoveCursor(0);
 }

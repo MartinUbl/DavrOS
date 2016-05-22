@@ -1,7 +1,7 @@
 #include "std.h"
 #include "idt.h"
 #include "support.h"
-#include "framebuffer.h"
+#include "console.h"
 
 // global IDT table
 static idt_descriptor __idt[MAX_INTERRUPTS];
@@ -13,7 +13,7 @@ static void __default_int_handler_null()
 {
     INT_ROUTINE_BEGIN();
 
-    echo("Unhandled interrupt");
+    Console::WriteLn("Unhandled interrupt");
 
     INT_ROUTINE_END();
 }

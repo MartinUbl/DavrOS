@@ -34,17 +34,66 @@
 // gap3 while r/w
 #define DG144_GAP3RW        0x1B
 
-// retrieves floppy drive type
-const char* get_floppy_type(int slot);
+class FloppyHandler
+{
+    public:
+        FloppyHandler();
+        // retrieves floppy drive type
+        const char* GetFloppyDriveType(int slot);
+        // Resets IRQ wait flag
+        void ResetIRQState();
 
-// jumps to specified offset (in bytes)
-int floppy_jump_to_offset(int offset);
-// reads specified byte count from floppy
-int floppy_read_bytes(int count, char* target);
-// writes specifies byte count onto floppy
-int floppy_write_bytes(int count, char* source);
+        // Initializes floppy drive
+        int Initialize();
 
-// initializes floppy driver
-int __init_floppy();
+        // jumps to offset on floppy (does not seek now)
+        int SeekTo(int offset);
+        // reads bytes from current location on floppy
+        int ReadBytes(char* target, int count);
+        // writes bytes to current location on floppy
+        int WriteBytes(char* source, int count);
+
+    protected:
+        // detects floppy drives present in system
+        void DetectDrives();
+        // start floppy motor
+        void MotorOn();
+        // stop floppy motor
+        void MotorOff();
+        // send command to floppy
+        void WriteCmd(char cmd);
+        // reads data from floppy
+        unsigned char ReadData();
+        // sends data to floppy and awaits status bytes
+        void CheckInterrupt(int *st0, int *cyl);
+        // seek to specified cylinder on specified head
+        int Seek(int cyli, int head);
+        // calibrates floppy, seeks to sector 0
+        int Calibrate();
+        // resets floppy state (at startup)
+        int Reset();
+        // init DMA channel for floppy transfer; read = 1 for reading, 0 for writing
+        void DMAInit(int read);
+        // reads/writes onto specific location using DMA
+        int DoTrack(int cyl, int read);
+        // reads track into DMA buffer
+        int ReadTrack(int cyl);
+        // writes track from DMA buffer
+        int WriteTrack(int cyl);
+
+    private:
+        // IRQ status
+        int m_floppy_status;
+        // current absolute offset
+        int m_floppy_current_offset;
+        // current track
+        int m_floppy_current_track;
+        // current offset within one track
+        int m_floppy_current_track_offset;
+        // stored floppy drive types
+        int m_floppy_drives_present[2];
+};
+
+extern FloppyHandler sFloppy;
 
 #endif

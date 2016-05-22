@@ -2,77 +2,23 @@
 #include "pic.h"
 #include "idt.h"
 #include "support.h"
+#include "keymap.h"
 
-#include "framebuffer.h"
+#include "console.h"
 
-// is SHIFT being held?
-static int __shift_on = 0;
-// is CTRL being held?
-static int __ctrl_on = 0;
-// is ALT being held?
-static int __alt_on = 0;
+KeyboardHandler sKeyboard;
 
-// keyboard LEDs
-static int __kb_state_lock = 0;
-
-// size of buffer for keyboard input
-#define KEYBOARD_BUFFER_SIZE 32
-
-// buffer for keyboard input
-static char __keyboard_buffer[KEYBOARD_BUFFER_SIZE];
-// index in keyboard buffer (first free position)
-static int __keyboard_buffer_ptr = 0;
-
-// key map for normal typing
-static unsigned char keyMap[] =
+KeyboardHandler::KeyboardHandler()
 {
-    0,0x1B,'1','2','3','4','5','6','7','8','9','0','-','=','\b','\t',
-    'q','w','e','r','t','z','u','i','o','p','[',']','\n',0x80,
-    'a','s','d','f','g','h','j','k','l',';',047,0140,0x80,
-    0134,'y','x','c','v','b','n','m',',','.','/',0x80,
-    '*',0x80,' ',0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,
-    0x80,0x80,0x80,0x80,'7','8','9',0x80,'4','5','6',0x80,
-    '1','2','3','0',0177
-};
-
-// shifted key map
-static unsigned char keyMapShifted[] =
-{
-    0,033,'!','@','#','$','%','^','&','*','(',')','_','+','\b','\t',
-	'Q','W','E','R','T','Z','U','I','O','P','{','}','\n',0x80,
-	'A','S','D','F','G','H','J','K','L',':',042,'~',0x80,
-	'|','Y','X','C','V','B','N','M','<','>','_',0x80,
-	'*',0x80,' ',0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,
-	0x80,0x80,0x80,0x80,'7','8','9',0x80,'4','5','6',0x80,
-	'1','2','3','0',177
-};
-
-// caps-lock key map
-static unsigned char keyMapCapsNormal[] =
-{
-    0,0x1B,'1','2','3','4','5','6','7','8','9','0','-','=','\b','\t',
-    'Q','W','E','R','T','Z','U','I','O','P','[',']','\n',0x80,
-    'A','S','D','F','G','H','J','K','L',';',047,0140,0x80,
-    '|','Y','X','C','V','B','N','M',',','.','/',0x80,
-    '*',0x80,' ',0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,
-    0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,
-    0x80,0x80,0x80,'0',0177
-};
-
-// caps-lock + shift key map
-static unsigned char keyMapCapsShifted[] =
-{
-	0,033,'!','@','#','$','%','^','&','*','(',')','_','+','\b','\t',
-	'q','w','e','r','t','z','u','i','o','p','{','}','\n',0x80,
-	'a','s','d','f','g','h','j','k','l',':',042,'~',0x80,
-	0134,'y','x','c','v','b','n','m','<','>','?',0x80,
-	'*',0x80,' ',0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,
-	0x80,0x80,0x80,0x80,'7','8','9',0x80,'4','5','6',0x80,
-	'1','2','3','0',177
-};
+    m_shift_on = 0;
+    m_ctrl_on = 0;
+    m_alt_on = 0;
+    m_kb_state_lock = 0;
+    m_keyboard_buffer_ptr = 0;
+}
 
 // converts scancode to character according to current key map
-static unsigned char __convert_scancode_to_char(unsigned char scancode, int* pressed)
+unsigned char KeyboardHandler::ConvertScancodeToCharacter(unsigned char scancode, int* pressed)
 {
     // extract original scancode
     int origScancode = scancode & 0x7F;     // lower 7 bits
@@ -87,43 +33,54 @@ static unsigned char __convert_scancode_to_char(unsigned char scancode, int* pre
     {
         case 0x36: // left shift
         case 0x2A: // right shift
-            __shift_on = press;
+            m_shift_on = press;
             return 0;
         case 0x1D: // CTRL key
-            __ctrl_on = press;
+            m_ctrl_on = press;
             return 0;
         case 0x38: // ALT key
-            __alt_on = press;
+            m_alt_on = press;
             return 0;
         case 0x3A: // capslock
-            __keyboard_toggle_led(KB_LED_CAPSLOCK);
+            ToggleLED(KB_LED_CAPSLOCK);
             return 0;
         case 0x45: // numlock
-            __keyboard_toggle_led(KB_LED_NUMLOCK);
+            ToggleLED(KB_LED_NUMLOCK);
             return 0;
         case 0x46: // scrolllock
-            __keyboard_toggle_led(KB_LED_SCROLLLOCK);
+            ToggleLED(KB_LED_SCROLLLOCK);
             return 0;
     }
 
     // select proper keymap
 
     // shift key
-    if (__shift_on)
+    if (m_shift_on)
     {
         // shift+capslock
-        if (__keyboard_is_led_on(KB_LED_CAPSLOCK))
+        if (IsLEDOn(KB_LED_CAPSLOCK))
             return keyMapCapsShifted[origScancode];
         // just shift
         return keyMapShifted[origScancode];
     }
 
     // capslock map
-    if (__keyboard_is_led_on(KB_LED_CAPSLOCK))
+    if (IsLEDOn(KB_LED_CAPSLOCK))
         return keyMapCapsNormal[origScancode];
 
     // normal
     return keyMap[origScancode];
+}
+
+void KeyboardHandler::SignalScancode(char scancode)
+{
+    int press;
+    char convchar = (char)ConvertScancodeToCharacter(scancode, &press);
+
+    // if the character is being pressed, and is not any kind of special character, and
+    // the buffer is still not empty, put the newly acquired character to buffer
+    if (press && convchar != 0 && m_keyboard_buffer_ptr != KEYBOARD_BUFFER_SIZE - 1)
+        m_keyboard_buffer[m_keyboard_buffer_ptr++] = convchar;
 }
 
 // keyboard IRQ1 handler
@@ -131,15 +88,10 @@ static void __keyboard_irq_handler()
 {
     INT_ROUTINE_BEGIN();
 
-    // read scancode and convert it
-    int press;
+    // read scancode
     char scancode = inb(KEYBOARD_DATA_PORT);
-    char convchar = (char)__convert_scancode_to_char(scancode, &press);
-
-    // if the character is being pressed, and is not any kind of special character, and
-    // the buffer is still not empty, put the newly acquired character to buffer
-    if (press && convchar != 0 && __keyboard_buffer_ptr != KEYBOARD_BUFFER_SIZE - 1)
-        __keyboard_buffer[__keyboard_buffer_ptr++] = convchar;
+    // send it to keyboard handler
+    sKeyboard.SignalScancode(scancode);
 
     // acknowledge PIC about interrupt being handled
     send_eoi(0);
@@ -147,27 +99,30 @@ static void __keyboard_irq_handler()
     INT_ROUTINE_END();
 }
 
+char KeyboardHandler::AwaitKey()
+{
+    while (m_keyboard_buffer_ptr == 0)
+    {
+        while (m_keyboard_buffer_ptr == 0)
+            ;
+    }
+
+    return m_keyboard_buffer[--m_keyboard_buffer_ptr];
+}
+
 void gets(char* buffer, int maxlen)
 {
     int ptr = 0;
     while (ptr != maxlen - 2) // -2 due to zero at the end
     {
-        // nested loops due to waiting for interrupts and probably not so secure returning to next instruction
-        // this may need some fixes to avoid nested waiting
-        while (__keyboard_buffer_ptr == 0)
-        {
-            while (__keyboard_buffer_ptr == 0)
-                ;
-        }
-
         // store character to buffer from keyboard buffer
-        buffer[ptr] = __keyboard_buffer[--__keyboard_buffer_ptr];
+        buffer[ptr] = sKeyboard.AwaitKey();
         // backspace character moves cursor back by one character
         if (buffer[ptr] == '\b')
         {
             if (ptr > 0)
             {
-                putchar('\b');
+                Console::PutChar('\b');
                 ptr--;
             }
             continue;
@@ -175,13 +130,13 @@ void gets(char* buffer, int maxlen)
         // endline and zero character ends reading
         else if (buffer[ptr] == '\n' || buffer[ptr] == '\0')
         {
-            putchar(buffer[ptr]);
+            Console::PutChar(buffer[ptr]);
             ptr++;
             break;
         }
 
         // print read character, and move on
-        putchar(buffer[ptr]);
+        Console::PutChar(buffer[ptr]);
         ptr++;
     }
 
@@ -190,44 +145,44 @@ void gets(char* buffer, int maxlen)
 }
 
 // send current LED state to keyboard data port
-static void __keyboard_update_leds()
+void KeyboardHandler::UpdateLEDs()
 {
-    outb(KEYBOARD_DATA_PORT, __kb_state_lock);
+    outb(KEYBOARD_DATA_PORT, m_kb_state_lock);
 }
 
-void __keyboard_clear_led(unsigned char led)
+void KeyboardHandler::ClearLED(unsigned char led)
 {
-    __kb_state_lock &= ~(led);
+    m_kb_state_lock &= ~(led);
 
-    __keyboard_update_leds();
+    UpdateLEDs();
 }
 
-void __keyboard_set_led(unsigned char led)
+void KeyboardHandler::SetLED(unsigned char led)
 {
-    __kb_state_lock |= led;
+    m_kb_state_lock |= led;
 
-    __keyboard_update_leds();
+    UpdateLEDs();
 }
 
-int __keyboard_is_led_on(unsigned char led)
+int KeyboardHandler::IsLEDOn(unsigned char led)
 {
-    if ((__kb_state_lock & led) != 0)
+    if ((m_kb_state_lock & led) != 0)
         return 1;
     else
         return 0;
 }
 
-void __keyboard_toggle_led(unsigned char led)
+void KeyboardHandler::ToggleLED(unsigned char led)
 {
-    if (__keyboard_is_led_on(led))
-        __keyboard_clear_led(led);
+    if (IsLEDOn(led))
+        ClearLED(led);
     else
-        __keyboard_set_led(led);
+        SetLED(led);
 }
 
-void __keyboard_flush_buffer()
+void KeyboardHandler::FlushBuffer()
 {
-    __keyboard_buffer_ptr = 0;
+    m_keyboard_buffer_ptr = 0;
 
     // following loop clears all characters on input in keyboard hardware buffer
     unsigned char temp;
@@ -245,11 +200,11 @@ void __keyboard_flush_buffer()
     while ((temp & 0x02) != 0);
 }
 
-void __init_keyboard()
+void KeyboardHandler::Initialize()
 {
     // reset state and buffer
-    __kb_state_lock = 0;
-    __keyboard_buffer_ptr = 0;
+    m_kb_state_lock = 0;
+    m_keyboard_buffer_ptr = 0;
 
     // hook IRQ 1
     __use_irq(1, __keyboard_irq_handler);
@@ -258,5 +213,5 @@ void __init_keyboard()
     __enable_irq(1);
 
     // send LED state
-    __keyboard_update_leds();
+    UpdateLEDs();
 }
