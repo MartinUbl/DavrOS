@@ -1,6 +1,6 @@
 OBJECTS = loader.o support.o kernel_loader.o framebuffer.o gdt.o std.o idt.o pic.o pit.o keyboard.o shell.o floppy.o
-CC = gcc
-CFLAGS = -O0 -m32 -g -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -ffreestanding -Wall -Wextra -Werror -c
+CC = g++
+CXXFLAGS = -m32 -nostdlib -nostdinc -fpermissive -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -ffreestanding -Wall -Wextra -c
 LDFLAGS = -T link.ld -melf_i386
 AS = nasm
 ASFLAGS = -f elf32
@@ -27,8 +27,8 @@ os.iso: kernel.elf
 run: os.iso
 	bochs -f bochsrc.txt -q
 
-%.o: %.c
-	$(CC) $(CFLAGS)  $< -o $@
+%.o: %.c %.cpp
+	$(CC) $(CXXFLAGS)  $< -o $@
 
 %.o: %.s
 	$(AS) $(ASFLAGS) $< -o $@

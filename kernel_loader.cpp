@@ -16,7 +16,7 @@ static void __panic()
 }
 
 // kernel entry point
-void kernel_loader_med()
+extern "C" void kernel_loader_med()
 {
     // clear screen, put some nice messages
 	clearscreen();

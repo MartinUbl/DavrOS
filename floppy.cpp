@@ -280,7 +280,7 @@ static void __floppy_dma_init(int read)
         unsigned long l;
     } a, c; // address and count
 
-    a.l = (unsigned int)&floppy_dmabuf;
+    a.l = (unsigned long)(floppy_dmabuf);
     c.l = (unsigned int)FLOPPY_DMALEN - 1; // -1 because of DMA counting
 
     if (read == 1)
