@@ -55,7 +55,4 @@ class KeyboardHandler
 
 extern KeyboardHandler sKeyboard;
 
-// reads string using keyboard input
-void gets(char* buffer, int maxlen);
-
 #endif

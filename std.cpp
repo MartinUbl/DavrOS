@@ -56,3 +56,40 @@ int strncmp(const char* first, const char* second, int maxlength)
 
     return 0;
 }
+
+int atoi(char* buffer)
+{
+    int tmp = 0;
+
+    while (*buffer != '\0')
+    {
+        tmp *= 10;
+        tmp += (*buffer) - '0';
+        buffer++;
+    }
+
+    return tmp;
+}
+
+void itoa(int src, char* dstbuffer)
+{
+    int i, j;
+    char c;
+
+    for (i = 0; src > 0; i++)
+    {
+        dstbuffer[i] = '0' + src % 10;
+        src = src / 10;
+    }
+
+    i--;
+
+    for (j = 0; j <= i/2; j++)
+    {
+        c = dstbuffer[j];
+        dstbuffer[j] = dstbuffer[i-j];
+        dstbuffer[i-j] = c;
+    }
+
+    dstbuffer[i+1] = '\0';
+}

@@ -11,6 +11,8 @@ class Console
         static void Write(const char* str);
         // writes string onto console and terminates line
         static void WriteLn(const char* str);
+        // reads line from keyboard input
+        static void ReadLn(char* buffer, int maxlength);
         // clears screen
         static void Clear();
 

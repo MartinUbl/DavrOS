@@ -22,7 +22,7 @@ void DefaultShell::Run()
         // read from user input
         char buffer[128];
         sKeyboard.FlushBuffer();
-        gets(buffer, 128);
+        Console::ReadLn(buffer, 128);
 
         // just some testing command...
         if (strcmp(buffer, "test") == 0)
