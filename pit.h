@@ -34,6 +34,9 @@
 #define I86_PIT_OCW_COUNTER_1           0x40
 #define I86_PIT_OCW_COUNTER_2           0x80
 
+// waits for specified amount of timer ticks
+void wait_ticks(unsigned int cnt);
+
 // initializes and installs PIT IRQ handler
 void __init_pit();
 

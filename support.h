@@ -20,4 +20,7 @@ void int_disable();
 // enables interrupts
 void int_enable();
 
+// loads vendor string to vendorstr (at least 12 characters long)
+void cpuinfo_load_vendor(char* vendorstr);
+
 #endif

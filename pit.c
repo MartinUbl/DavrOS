@@ -6,9 +6,6 @@
 // internal PIT tick counter
 static unsigned int __pit_counter = 0;
 
-// following part is not yet used, because PIT implementation is just very small stub for now
-/*
-
 // sends command to PIT
 static void __pit_send_command(unsigned char cmd)
 {
@@ -23,6 +20,8 @@ static void __pit_send_data(unsigned short data, unsigned short counter)
     outb(port, (unsigned char)data);
 }
 
+// following part is not yet used, because PIT implementation is just very small stub for now
+/*
 // reads data from PIT
 static unsigned char __pit_read_data(unsigned short counter)
 {
@@ -31,8 +30,17 @@ static unsigned char __pit_read_data(unsigned short counter)
 
     return inb(port);
 }
-
 */
+
+void wait_ticks(unsigned int cnt)
+{
+    unsigned int limit = __pit_counter + cnt;
+    while (__pit_counter < limit)
+    {
+        while (__pit_counter < limit)
+            ;
+    }
+}
 
 // PIT IRQ handling routine
 static void __pit_int_handler()
@@ -57,4 +65,18 @@ void __init_pit()
 
     // enable IRQ0
     __enable_irq(0);
+
+    // use frequency of 1000Hz (approximatelly)
+    const unsigned short timerFreq = 1000;
+
+    unsigned short divisor = (unsigned short)(1193181 / timerFreq);
+
+    unsigned char ocw = 0;
+    ocw = (ocw & ~I86_PIT_OCW_MASK_MODE) | I86_PIT_OCW_MODE_RATEGEN;
+    ocw = (ocw & ~I86_PIT_OCW_MASK_RL) | I86_PIT_OCW_RL_DATA;
+    ocw = (ocw & ~I86_PIT_OCW_MASK_COUNTER) | I86_PIT_OCW_COUNTER_0;
+    __pit_send_command(ocw);
+
+    __pit_send_data(divisor & 0xff, 0);
+    __pit_send_data((divisor >> 8) & 0xff, 0);
 }

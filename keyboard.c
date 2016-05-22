@@ -24,7 +24,7 @@ static char __keyboard_buffer[KEYBOARD_BUFFER_SIZE];
 static int __keyboard_buffer_ptr = 0;
 
 // key map for normal typing
-static char keyMap[] =
+static unsigned char keyMap[] =
 {
     0,0x1B,'1','2','3','4','5','6','7','8','9','0','-','=','\b','\t',
     'q','w','e','r','t','z','u','i','o','p','[',']','\n',0x80,
@@ -36,7 +36,7 @@ static char keyMap[] =
 };
 
 // shifted key map
-static char keyMapShifted[] =
+static unsigned char keyMapShifted[] =
 {
     0,033,'!','@','#','$','%','^','&','*','(',')','_','+','\b','\t',
 	'Q','W','E','R','T','Z','U','I','O','P','{','}','\n',0x80,
@@ -48,7 +48,7 @@ static char keyMapShifted[] =
 };
 
 // caps-lock key map
-static char keyMapCapsNormal[] =
+static unsigned char keyMapCapsNormal[] =
 {
     0,0x1B,'1','2','3','4','5','6','7','8','9','0','-','=','\b','\t',
     'Q','W','E','R','T','Z','U','I','O','P','[',']','\n',0x80,
@@ -60,7 +60,7 @@ static char keyMapCapsNormal[] =
 };
 
 // caps-lock + shift key map
-static char keyMapCapsShifted[] =
+static unsigned char keyMapCapsShifted[] =
 {
 	0,033,'!','@','#','$','%','^','&','*','(',')','_','+','\b','\t',
 	'q','w','e','r','t','z','u','i','o','p','{','}','\n',0x80,
@@ -72,7 +72,7 @@ static char keyMapCapsShifted[] =
 };
 
 // converts scancode to character according to current key map
-static char __convert_scancode_to_char(unsigned char scancode, int* pressed)
+static unsigned char __convert_scancode_to_char(unsigned char scancode, int* pressed)
 {
     // extract original scancode
     int origScancode = scancode & 0x7F;     // lower 7 bits
@@ -134,7 +134,7 @@ static void __keyboard_irq_handler()
     // read scancode and convert it
     int press;
     char scancode = inb(KEYBOARD_DATA_PORT);
-    char convchar = __convert_scancode_to_char(scancode, &press);
+    char convchar = (char)__convert_scancode_to_char(scancode, &press);
 
     // if the character is being pressed, and is not any kind of special character, and
     // the buffer is still not empty, put the newly acquired character to buffer

@@ -2,6 +2,7 @@ global outb
 global inb
 global io_wait
 global halt
+global cpuinfo_load_vendor
 global load_gdt
 global load_idt
 global int_disable
@@ -39,6 +40,20 @@ io_wait:
 ; halt - halts machine
 halt:
     hlt                     ; halt the CPU
+
+
+; cpuinfo_load_vendor - loads vendor name to supplied address
+; stack: [esp + 4] target address
+;        [esp    ] return address
+cpuinfo_load_vendor:
+    mov eax, 0                  ; flag for "vendor string"
+    cpuid                       ; call cpuinfo
+    mov eax, [esp + 4]          ; move target pointer to eax
+    mov dword [eax], ebx        ; store ebx part
+    mov dword [eax + 4], edx    ; store ecx part
+    mov dword [eax + 8], ecx    ; store edx part
+    mov dword [eax + 12], 0x0   ; terminate with zero
+    ret                         ; return back
 
 
 ; load_gdt - loads GDT table to memory using lgdt instruction

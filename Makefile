@@ -1,4 +1,4 @@
-OBJECTS = loader.o support.o kernel_loader.o framebuffer.o gdt.o std.o idt.o pic.o pit.o keyboard.o shell.o
+OBJECTS = loader.o support.o kernel_loader.o framebuffer.o gdt.o std.o idt.o pic.o pit.o keyboard.o shell.o floppy.o
 CC = gcc
 CFLAGS = -O0 -m32 -g -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -ffreestanding -Wall -Wextra -Werror -c
 LDFLAGS = -T link.ld -melf_i386

@@ -6,6 +6,7 @@
 #include "pit.h"
 #include "keyboard.h"
 #include "shell.h"
+#include "floppy.h"
 
 // kernel panic - print message and halt CPU
 static void __panic()
@@ -63,8 +64,15 @@ void kernel_loader_med()
     __init_keyboard();
     echo("OK\n");
 
-    // we are done now
+    // we are done with interrupt-sensitive work
     int_enable();
+
+    // init floppy driver
+    echo("Initializing floppy driver... ");
+    if (__init_floppy() != 0)
+        echo("ERROR\n");
+    else
+        echo("OK\n");
 
     // run shell
     run_shell();
