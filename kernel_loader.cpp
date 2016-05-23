@@ -7,6 +7,10 @@
 #include "keyboard.h"
 #include "shell.h"
 #include "floppy.h"
+#include "std.h"
+#include "mmgr.h"
+
+#include "grub/multiboot.h"
 
 extern "C" void (*__CTOR_LIST__)();
 
@@ -41,14 +45,36 @@ static void __panic()
 }
 
 // kernel entry point
-extern "C" void kernel_loader_med()
+extern "C" void kernel_loader_med(multiboot_info_t* mbt)
 {
     call_constructors();
 
     // clear screen, put some nice messages
-	Console::Clear();
-	Console::WriteLn("DavrOS v0.1");
-	Console::WriteLn("Educational project\n");
+    Console::Clear();
+    Console::WriteLn("DavrOS v0.1");
+    Console::WriteLn("Educational project\n");
+
+    sMemMgr.Initialize();
+
+    unsigned int avail_mem = 0;
+
+    multiboot_memory_map_t* mmap = (multiboot_memory_map_t*)mbt->mmap_addr;
+    while ((unsigned int)mmap < mbt->mmap_addr + mbt->mmap_length)
+    {
+        avail_mem += mmap->len;
+        mmap = (multiboot_memory_map_t*)((unsigned int)mmap + mmap->size + sizeof(unsigned int));
+    }
+
+    sMemMgr.SetPhysicalMemory(avail_mem);
+
+    avail_mem /= (1024*1024);
+
+    char buf[32];
+    itoa(avail_mem, buf, 10);
+    Console::Write("Available physical memory: ");
+    Console::Write(buf);
+    Console::WriteLn(" MB");
+    Console::PutChar('\n');
 
     // initiate kernel load routine
 

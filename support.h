@@ -24,6 +24,12 @@ extern "C"
 
     // loads vendor string to vendorstr (at least 12 characters long)
     void cpuinfo_load_vendor(char* vendorstr);
+
+    // flush TLB for address
+    void flushtlb(unsigned int address);
+
+    unsigned int get_kernel_physical_start();
+    unsigned int get_kernel_physical_end();
 }
 
 #endif

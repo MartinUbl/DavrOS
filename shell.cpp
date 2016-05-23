@@ -5,6 +5,7 @@
 #include "support.h"
 #include "floppy.h"
 #include "pit.h"
+#include "mmgr.h"
 
 DefaultShell::DefaultShell()
 {
@@ -31,6 +32,13 @@ void DefaultShell::Run()
         {
             cpuinfo_load_vendor(buffer);
             Console::WriteLn(buffer);
+        }
+        else if (strcmp(buffer, "free") == 0)
+        {
+            itoa(sMemMgr.GetFreeMemory() / (1024*1024), buffer, 10);
+            Console::Write("Free memory: ");
+            Console::Write(buffer);
+            Console::WriteLn(" MB");
         }
         else if (strncmp(buffer, "floppy", 6) == 0)
         {

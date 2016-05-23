@@ -71,25 +71,51 @@ int atoi(char* buffer)
     return tmp;
 }
 
-void itoa(int src, char* dstbuffer)
+void str_reverse(char* str, int length)
 {
-    int i, j;
-    char c;
-
-    for (i = 0; src > 0; i++)
+    int start = 0;
+    int end = length -1;
+    char tmp;
+    while (start < end)
     {
-        dstbuffer[i] = '0' + src % 10;
-        src = src / 10;
+        tmp = *(str+start);
+        *(str+start) = *(str+end);
+        *(str+end) = tmp;
+        start++;
+        end--;
+    }
+}
+
+void itoa(int num, char* str, int base)
+{
+    int i = 0;
+    bool isNegative = false;
+    int rem;
+
+    if (num == 0)
+    {
+        str[i++] = '0';
+        str[i] = '\0';
     }
 
-    i--;
-
-    for (j = 0; j <= i/2; j++)
+    // consider every other base number as unsigned
+    if (num < 0 && base == 10)
     {
-        c = dstbuffer[j];
-        dstbuffer[j] = dstbuffer[i-j];
-        dstbuffer[i-j] = c;
+        isNegative = true;
+        num = -num;
     }
 
-    dstbuffer[i+1] = '\0';
+    while (num != 0)
+    {
+        rem = num % base;
+        str[i++] = (rem > 9) ? (rem-10) + 'A' : rem + '0';
+        num = num/base;
+    }
+
+    if (isNegative)
+        str[i++] = '-';
+
+    str[i] = '\0';
+
+    str_reverse(str, i);
 }

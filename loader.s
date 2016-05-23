@@ -10,7 +10,9 @@ global loader                       ; the entry symbol for ELF
     PAGE_TABLE_0        equ 0x9D000 ; 0th page table. Address must be 4KB aligned
     PAGE_TABLE_768      equ 0x9E000 ; 768th page table. Address must be 4KB aligned
     PAGE_TABLE_ENTRIES  equ 1024    ; each page table has 1024 entries
-    PAGE_PRIV           equ 3       ; attributes (page is present;page is writable; supervisor mode)
+    PAGE_PRIV           equ 5       ; attributes (page is present; page is writable; supervisor mode)
+
+    MB_PERSISTENT       equ 0x90000 ; address, where we store address of GRUB multiboot structure
 
     ; misc
     KERNEL_STACK_SIZE equ 4096      ; kernel stack size
@@ -29,6 +31,8 @@ global loader                       ; the entry symbol for ELF
         dd CHECKSUM                 ; and the checksum
 
     loader:                         ; the loader label (defined as entry point in linker script)
+        mov eax, MB_PERSISTENT      ; load address of MB_PERSISTENT to store original ebx value
+        mov dword [eax], ebx        ; store ebx value for later reuse
         mov esp, kernel_stack + KERNEL_STACK_SIZE
         jmp near enable_paging      ; near jump to paging-enabling routine; any far jump would
                                     ; result into GPF or PF exceptions (therefore leading to higher
@@ -36,6 +40,9 @@ global loader                       ; the entry symbol for ELF
     higher_half:
                                     ; initialize kernel stack by pointing esp to the end of
                                     ; kernel stack reserved space in BSS
+        mov eax, MB_PERSISTENT      ; load MB_PERSISTENT address
+        mov edx, dword [eax]        ; restore original multiboot structure address
+        push edx                    ; pass it as argument for kernel entry
         call kernel_loader_med      ; call C function
 
     .endlessloop:
@@ -74,7 +81,7 @@ global loader                       ; the entry symbol for ELF
         ; map the 768th table to physical addr 1MB
         ; the 768th table maps 3GB and higher of virtual memory
         mov eax, PAGE_TABLE_768             ; first page table
-        mov ebx, 0x000000 | PAGE_PRIV       ; starting physical address of page
+        mov ebx, 0x0 | PAGE_PRIV            ; starting physical address of page
         mov ecx, PAGE_TABLE_ENTRIES         ; for every page in table...
     .loop2:
         mov dword [eax], ebx                ; write the entry

@@ -2,11 +2,17 @@ global outb
 global inb
 global io_wait
 global halt
+global get_kernel_physical_start
+global get_kernel_physical_end
 global cpuinfo_load_vendor
 global load_gdt
 global load_idt
 global int_disable
 global int_enable
+global flushtlb
+
+extern kernel_physical_start
+extern kernel_physical_end
 
 ; outb - send a byte to an I/O port
 ; stack: [esp + 8] data byte
@@ -40,6 +46,15 @@ io_wait:
 ; halt - halts machine
 halt:
     hlt                     ; halt the CPU
+
+
+get_kernel_physical_start:
+    mov eax, kernel_physical_start
+    ret
+
+get_kernel_physical_end:
+    mov eax, kernel_physical_end
+    ret
 
 
 ; cpuinfo_load_vendor - loads vendor name to supplied address
@@ -93,3 +108,9 @@ int_disable:
 int_enable:
     sti                     ; enable interrupts
     ret                     ; return back
+
+; flushtlb
+flushtlb:
+    mov eax, [esp + 4]
+    invlpg [eax]
+    ret
