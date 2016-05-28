@@ -27,16 +27,6 @@ extern "C" void call_constructors()
     }
 }
 
-extern "C" void __dso_handle()
-{
-    // ignore dtors for now
-}
-
-extern "C" void __cxa_atexit()
-{
-    // ignore dtors for now
-}
-
 // kernel panic - print message and halt CPU
 static void __panic()
 {

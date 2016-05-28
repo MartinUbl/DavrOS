@@ -57,6 +57,26 @@ int strncmp(const char* first, const char* second, int maxlength)
     return 0;
 }
 
+void strcpy(const char* src, char* dst)
+{
+    int i = 0;
+    do
+    {
+        dst[i] = src[i];
+    }
+    while (src[i++] != '\0');
+}
+
+void strncpy(const char* src, char* dst, int amount)
+{
+    int i = 0;
+    do
+    {
+        dst[i] = src[i];
+    }
+    while (src[i++] != '\0' && i < amount);
+}
+
 int atoi(char* buffer)
 {
     int tmp = 0;

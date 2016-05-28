@@ -6,6 +6,26 @@
 
 MemoryManager sMemMgr;
 
+void* operator new(uint32_t len)
+{
+    return (void*)sMemMgr.mem_alloc(len);
+}
+
+void operator delete(void *ptr)
+{
+    sMemMgr.mem_free(ptr);
+}
+
+void operator delete[](void *ptr)
+{
+    ::operator delete(ptr);
+}
+
+void* operator new[](uint32_t len)
+{
+    return ::operator new(len);
+}
+
 MemoryManager::MemoryManager()
 {
     m_physical_memory = 0;

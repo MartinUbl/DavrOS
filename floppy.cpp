@@ -1,4 +1,5 @@
 #include "floppy.h"
+#include "dma.h"
 #include "pic.h"
 #include "idt.h"
 #include "support.h"
@@ -59,6 +60,14 @@ const char* FloppyHandler::GetFloppyDriveType(int slot)
         return __floppy_drive_unknown;
 
     return __floppy_drive_types[m_floppy_drives_present[slot]];
+}
+
+bool FloppyHandler::HasFloppyInSlot(int slot)
+{
+    if (slot < 0 || slot > 1)
+        return false;
+
+    return m_floppy_drives_present[slot] != 0;
 }
 
 void FloppyHandler::ResetIRQState()
@@ -146,10 +155,7 @@ int FloppyHandler::Seek(int cyli, int head)
 
         // wait for interrupt
         while (m_floppy_status == 1)
-        {
-            while (m_floppy_status == 1)
-                ;
-        }
+            ;
         CheckInterrupt(&st0, &cyl);
 
         // not ready
@@ -255,42 +261,14 @@ int FloppyHandler::Reset()
     return 0;
 }
 
-void FloppyHandler::DMAInit(int read)
+void block2hts(int block, int *head, int *track, int *sector)
 {
-    unsigned char mode;
-
-    union
-    {
-        unsigned char b[4];
-        unsigned long l;
-    } a, c; // address and count
-
-    a.l = (unsigned long)(floppy_dmabuf);
-    c.l = (unsigned int)FLOPPY_DMALEN - 1; // -1 because of DMA counting
-
-    if (read == 1)
-        mode = 0x46;    // 01:0:0:01:10 = single/inc/no-auto/to-mem/chan2
-    else
-        mode = 0x4A;    // 01:0:0:10:10 = single/inc/no-auto/from-mem/chan2
-
-    outb(0x0a, 0x06);   // mask DMA channel 2
-
-    outb(0x0c, 0xff);   // reset flip-flop
-    outb(0x04, a.b[0]); //  - address low byte
-    outb(0x04, a.b[1]); //  - address high byte
-
-    outb(0x81, a.b[2]); // external page register
-
-    outb(0x0c, 0xff);   // reset flip-flop
-    outb(0x05, c.b[0]); //  - count low byte
-    outb(0x05, c.b[1]); //  - count high byte
-
-    outb(0x0b, mode);   // set mode (see above)
-
-    outb(0x0a, 0x02);   // unmask chan 2
+   *head = (block % (DG144_SPT * DG144_HEADS)) / DG144_SPT;
+   *track = block / (DG144_SPT * DG144_HEADS);
+   *sector = block % DG144_SPT + 1;
 }
 
-int FloppyHandler::DoTrack(int cyl, int read)
+int FloppyHandler::DoTrack(int block, int read)
 {
     unsigned char cmd;
 
@@ -304,8 +282,11 @@ int FloppyHandler::DoTrack(int cyl, int read)
     else
         cmd = FLOPPY_CMD_WRITE_DATA | flags;
 
+    int h, t, s;
+    block2hts(block, &h, &t, &s);
+
     // seek both heads
-    if (Seek(cyl, 0) || Seek(cyl, 1))
+    if (Seek(t, 0) || Seek(t, 1))
         return -1;
 
     int i;
@@ -318,26 +299,24 @@ int FloppyHandler::DoTrack(int cyl, int read)
         m_floppy_status = 1;
 
         // init dma for specified transfer mode
-        DMAInit(read);
+        dma_init(DMA_CHANNEL_FLOPPY, floppy_dmabuf, FLOPPY_DMALEN, read);
 
         wait_ticks(100);        // give some time (100ms) to settle after the seeks
 
         WriteCmd(cmd);  // set above for current direction
-        WriteCmd(0);    // 0:0:0:0:0:HD:US1:US0 = head and drive
-        WriteCmd(cyl);  // cylinder
-        WriteCmd(0);    // first head (should match with above)
-        WriteCmd(1);    // first sector, strangely counts from 1
+
+        WriteCmd(h << 2);    // 0:0:0:0:0:HD:US1:US0 = head and drive
+        WriteCmd(t);    // cylinder
+        WriteCmd(h);    // first head (should match with above)
+        WriteCmd(s);    // first sector, strangely counts from 1
         WriteCmd(2);    // bytes/sector, 128*2^x (x=2 -> 512)
-        WriteCmd(18);   // number of tracks to operate on
-        WriteCmd(0x1B); // GAP3 length, 27 is default for 3.5"
+        WriteCmd(DG144_SPT);   // number of tracks to operate on
+        WriteCmd(DG144_GAP3RW); // GAP3 length, 27 is default for 3.5"
         WriteCmd(0xFF); // data length (0xFF if B/S != 0)
 
         // wait for the interrupt
         while (m_floppy_status == 1)
-        {
-            while (m_floppy_status == 1)
-                ;
-        }
+            ;
 
         // first read status information
         unsigned char st0, st1, st2, /*rcy, rhe, rse,*/ bps;
@@ -447,11 +426,15 @@ int FloppyHandler::DoTrack(int cyl, int read)
 
 int FloppyHandler::ReadTrack(int cyl)
 {
+    m_seek_track = cyl;
+    m_seek_read = true;
     return DoTrack(cyl, 1);
 }
 
 int FloppyHandler::WriteTrack(int cyl)
 {
+    m_seek_track = cyl;
+    m_seek_read = false;
     return DoTrack(cyl, 0);
 }
 
@@ -468,12 +451,18 @@ int FloppyHandler::SeekTo(int offset)
     return 0;
 }
 
+int FloppyHandler::GetPosition()
+{
+    return m_floppy_current_offset;
+}
+
 int FloppyHandler::ReadBytes(char* target, int count)
 {
     int i;
 
-    // read current track into DMA
-    ReadTrack(m_floppy_current_track);
+    // read current track into DMA if needed
+    if (m_seek_track != m_floppy_current_track || !m_seek_read)
+        ReadTrack(m_floppy_current_track);
 
     // secure offset
     if (m_floppy_current_offset + count >= 1509904)
@@ -506,7 +495,8 @@ int FloppyHandler::WriteBytes(char* source, int count)
     int i;
 
     // read track to not lose data
-    ReadTrack(m_floppy_current_track);
+    if (m_seek_track != m_floppy_current_track || m_seek_read)
+        ReadTrack(m_floppy_current_track);
 
     // secure count
     if (m_floppy_current_offset + count >= 1509904)

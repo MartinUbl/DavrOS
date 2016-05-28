@@ -1,6 +1,7 @@
 #include "console.h"
 #include "keyboard.h"
 #include "framebuffer.h"
+#include "std.h"
 
 Console::Console()
 {
@@ -19,8 +20,32 @@ void Console::Write(const char* str)
 
 void Console::WriteLn(const char* str)
 {
-    sFramebuffer.Echo(str);
-    sFramebuffer.PutChar('\n');
+    Write(str);
+    PutChar('\n');
+}
+
+void Console::WriteN(const char* str, int maxlen)
+{
+    sFramebuffer.Echo(str, maxlen);
+}
+
+void Console::WriteNLn(const char* str, int maxlen)
+{
+    WriteN(str, maxlen);
+    PutChar('\n');
+}
+
+void Console::Write(int num, int base)
+{
+    char buf[32];
+    itoa(num, buf, base);
+    Write(buf);
+}
+
+void Console::WriteLn(int num, int base)
+{
+    Write(num, base);
+    PutChar('\n');
 }
 
 void Console::ReadLn(char* buffer, int maxlen)

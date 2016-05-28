@@ -1,6 +1,8 @@
 #ifndef __FLOPPY_H__
 #define __FLOPPY_H__
 
+#include "datasource.h"
+
 // floppy ports
 #define FLOPPY_DOR_PORT     0x03F2
 #define FLOPPY_MSR_PORT     0x03F4
@@ -15,8 +17,8 @@
 #define FLOPPY_CMD_SENSE_INTERRUPT      8
 #define FLOPPY_CMD_SEEK                 15
 
-// floppy DMA buffer size (512 bytes = 1 sector) (original: 0x4800)
-#define FLOPPY_DMALEN       0x200
+// floppy DMA buffer size (512 bytes = 1 sector)
+#define FLOPPY_DMALEN       512
 
 // maximum detectable floppy types
 #define MAX_FLOPPY_TYPES    6
@@ -34,12 +36,14 @@
 // gap3 while r/w
 #define DG144_GAP3RW        0x1B
 
-class FloppyHandler
+class FloppyHandler : public BlockDataSource
 {
     public:
         FloppyHandler();
         // retrieves floppy drive type
         const char* GetFloppyDriveType(int slot);
+        // is floppy drive present in this slot?
+        bool HasFloppyInSlot(int slot);
         // Resets IRQ wait flag
         void ResetIRQState();
 
@@ -48,6 +52,8 @@ class FloppyHandler
 
         // jumps to offset on floppy (does not seek now)
         int SeekTo(int offset);
+        // retrieves current position
+        int GetPosition();
         // reads bytes from current location on floppy
         int ReadBytes(char* target, int count);
         // writes bytes to current location on floppy
@@ -92,6 +98,9 @@ class FloppyHandler
         int m_floppy_current_track_offset;
         // stored floppy drive types
         int m_floppy_drives_present[2];
+
+        int m_seek_track;
+        bool m_seek_read;
 };
 
 extern FloppyHandler sFloppy;

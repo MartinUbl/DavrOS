@@ -1,3 +1,5 @@
+#include "filesystem.h"
+#include "fat12.h"
 #include "shell.h"
 #include "keyboard.h"
 #include "console.h"
@@ -7,9 +9,13 @@
 #include "pit.h"
 #include "mmgr.h"
 
+static const char* shell_knownLocationTypesStr[] = {
+    "?", "floppy"
+};
+
 DefaultShell::DefaultShell()
 {
-    //
+    m_locationType = SLT_NONE;
 }
 
 void DefaultShell::Run()
@@ -18,7 +24,9 @@ void DefaultShell::Run()
     while (1)
     {
         // prompt
-        Console::Write("\n#> ");
+        Console::PutChar('\n');
+        Console::Write(shell_knownLocationTypesStr[m_locationType]);
+        Console::Write(":> ");
 
         // read from user input
         char buffer[128];
@@ -42,16 +50,57 @@ void DefaultShell::Run()
         }
         else if (strncmp(buffer, "floppy", 6) == 0)
         {
-            Console::Write("Drive A: ");
-            Console::WriteLn(sFloppy.GetFloppyDriveType(0));
-            Console::Write("Drive B: ");
-            Console::WriteLn(sFloppy.GetFloppyDriveType(1));
-            Console::Write("FAT OEM on drive A: ");
+            if (sFloppy.HasFloppyInSlot(0))
+            {
+                Console::Write("Drive A: ");
+                Console::WriteLn(sFloppy.GetFloppyDriveType(0));
 
-            sFloppy.SeekTo(3);
-            sFloppy.ReadBytes(buffer, 8);
-            buffer[8] = 0;
-            Console::WriteLn(buffer);
+                Console::WriteLn("Reading FAT12 filesystem...");
+
+                m_currentFS = new FAT12Reader();
+                m_currentFS->Initialize(&sFloppy);
+
+                Console::WriteLn("Switched to floppy location");
+                m_locationType = SLT_FLOPPY;
+            }
+        }
+        else if (strncmp(buffer, "ls", 2) == 0)
+        {
+            if (!m_currentFS)
+            {
+                Console::WriteLn("No location selected");
+                continue;
+            }
+            else
+            {
+                DirectoryEntry** dirlist = m_currentFS->GetDirectoryList();
+                int i = 0;
+                while (dirlist[i] != nullptr)
+                {
+                    Console::Write(dirlist[i]->name);
+                    Console::Write("   ");
+                    Console::Write(dirlist[i]->size_bytes);
+                    Console::WriteLn("B");
+
+                    i++;
+                }
+            }
+        }
+        else if (strncmp(buffer, "cat", 3) == 0)
+        {
+            if (!m_currentFS)
+            {
+                Console::WriteLn("No location selected");
+                continue;
+            }
+            else
+            {
+                char* out = m_currentFS->ReadFile(&buffer[4]);
+                if (!out)
+                    Console::WriteLn("File not found!");
+                else
+                    Console::WriteLn(out);
+            }
         }
         else
             Console::WriteLn("Invalid command or filename");

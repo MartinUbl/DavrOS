@@ -1,6 +1,9 @@
 #ifndef __SHELL_H__
 #define __SHELL_H__
 
+#include "stdint.h"
+#include "filesystem.h"
+
 class ShellInterface
 {
     public:
@@ -15,6 +18,14 @@ class ShellInterface
         //
 };
 
+enum ShellLocationType
+{
+    SLT_NONE = 0,
+    SLT_FLOPPY = 1,
+
+    MAX_SLT
+};
+
 class DefaultShell : public ShellInterface
 {
     public:
@@ -22,7 +33,8 @@ class DefaultShell : public ShellInterface
         void Run();
 
     protected:
-        //
+        uint32_t m_locationType;
+        FileSystem* m_currentFS;
 
     private:
         //

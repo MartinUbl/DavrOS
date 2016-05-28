@@ -15,6 +15,8 @@ class Framebuffer
         void PutChar(char c);
         // writes zero-terminated string
         void Echo(const char* str);
+        // writes zero-terminated string or maximum of maxlen characters from string
+        void Echo(const char* str, int maxlen);
         // clears screen and resets cursor position to 0;0
         void ClearScreen();
 

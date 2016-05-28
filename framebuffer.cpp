@@ -121,6 +121,14 @@ void Framebuffer::Echo(const char* str)
 		PutChar(str[i++]);
 }
 
+void Framebuffer::Echo(const char* str, int maxlen)
+{
+    int i = 0;
+	// write until we reach zero character, or maximum length
+	while (str[i] != '\0' && i < maxlen)
+		PutChar(str[i++]);
+}
+
 void Framebuffer::ClearScreen()
 {
 	int i, j;

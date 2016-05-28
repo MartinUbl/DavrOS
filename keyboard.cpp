@@ -34,13 +34,13 @@ unsigned char KeyboardHandler::ConvertScancodeToCharacter(unsigned char scancode
     {
         case 0x36: // left shift
         case 0x2A: // right shift
-            m_shift_on = press;
+            m_shift_on = !press;
             return 0;
         case 0x1D: // CTRL key
-            m_ctrl_on = press;
+            m_ctrl_on = !press;
             return 0;
         case 0x38: // ALT key
-            m_alt_on = press;
+            m_alt_on = !press;
             return 0;
         case 0x3A: // capslock
             ToggleLED(KB_LED_CAPSLOCK);
