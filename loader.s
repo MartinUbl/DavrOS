@@ -1,4 +1,5 @@
 global loader                       ; the entry symbol for ELF
+global kernel_stack_bottom          ; store kernel bottom address of stack
 
     MAGIC_NUMBER equ 0x1BADB002     ; define the magic number constant
     FLAGS        equ 0x0            ; multiboot flags
@@ -9,8 +10,9 @@ global loader                       ; the entry symbol for ELF
     PAGE_DIR            equ 0x9C000 ; page directory table
     PAGE_TABLE_0        equ 0x9D000 ; 0th page table. Address must be 4KB aligned
     PAGE_TABLE_768      equ 0x9E000 ; 768th page table. Address must be 4KB aligned
+    PAGE_TABLE_DUMMY    equ 0x9B000 ; dummy page used for userspace exchange
     PAGE_TABLE_ENTRIES  equ 1024    ; each page table has 1024 entries
-    PAGE_PRIV           equ 5       ; attributes (page is present; page is writable; supervisor mode)
+    PAGE_PRIV           equ 5       ; attributes (page is present; page is writable; user mode)
 
     MB_PERSISTENT       equ 0x90000 ; address, where we store address of GRUB multiboot structure
 
@@ -23,6 +25,7 @@ global loader                       ; the entry symbol for ELF
     align 4
     kernel_stack:                   ; set up space for kernel stack
         resb KERNEL_STACK_SIZE      ; reserve KERNEL_STACK_SIZE bytes for stack
+    kernel_stack_bottom:
 
     section .text                   ; start of the text (code) section
     align 4                         ; the code must be 4 byte aligned

@@ -18,6 +18,8 @@ extern "C"
     void load_gdt(unsigned int address);
     // loads IDT into memory using ASM instructuons
     void load_idt(unsigned int address);
+    // flushes TSS segment
+    void flush_tss(unsigned int segment);
 
     // disables interrupts
     void int_disable();

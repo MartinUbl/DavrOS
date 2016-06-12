@@ -8,6 +8,10 @@
 #include "floppy.h"
 #include "pit.h"
 #include "mmgr.h"
+#include "pic.h"
+#include "process.h"
+
+#include "taskswitch.h"
 
 static const char* shell_knownLocationTypesStr[] = {
     "?", "floppy"
@@ -100,6 +104,26 @@ void DefaultShell::Run()
                     Console::WriteLn("File not found!");
                 else
                     Console::WriteLn(out);
+            }
+        }
+        else if (strncmp(buffer, "run", 3) == 0)
+        {
+            if (!m_currentFS)
+            {
+                Console::WriteLn("No location selected");
+                continue;
+            }
+            else
+            {
+                char* out = m_currentFS->ReadFile(&buffer[4]);
+                if (!out)
+                    Console::WriteLn("File not found!");
+                else
+                {
+                    uint32_t pid = sProcessMgr.CreateProcess(out);
+                    PCB_t* pcb = sProcessMgr.GetPCB(pid);
+                    switch_to_process(pcb);
+                }
             }
         }
         else

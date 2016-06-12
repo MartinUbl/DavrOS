@@ -1,11 +1,18 @@
 #ifndef __GDT_H__
 #define __GDT_H__
 
+// kernelspace segments (PL0)
+#define GDT_KERNELSPACE_CODE_SEGMENT    0x08
+#define GDT_KERNELSPACE_DATA_SEGMENT    0x10
+// userspace segments (PL3)
+#define GDT_USERSPACE_CODE_SEGMENT      0x18
+#define GDT_USERSPACE_DATA_SEGMENT      0x20
+
 // access bit
 #define I86_GDT_DESC_ACCESS     0x0001
 // readable and writable
 #define I86_GDT_DESC_READWRITE  0x0002
-// expansion direction bit
+// expansion direction bit for data selectors / conforming bit for code selectors
 #define I86_GDT_DESC_EXPANSION  0x0004
 // executable code segment
 #define I86_GDT_DESC_EXEC_CODE  0x0008
@@ -43,6 +50,37 @@ typedef struct
     unsigned char  granularity;
     unsigned char  baseHi;   // bits 24-32 of base address
 } __attribute__((packed)) gdt_descriptor;
+
+typedef struct
+{
+    unsigned int prev_tss;
+    unsigned int esp0; // The stack pointer to load when we change to kernel mode.
+    unsigned int ss0;  // The stack segment to load when we change to kernel mode.
+    unsigned int esp1;
+    unsigned int ss1;
+    unsigned int esp2;
+    unsigned int ss2;
+    unsigned int cr3;
+    unsigned int eip;
+    unsigned int eflags;
+    unsigned int eax;
+    unsigned int ecx;
+    unsigned int edx;
+    unsigned int ebx;
+    unsigned int esp;
+    unsigned int ebp;
+    unsigned int esi;
+    unsigned int edi;
+    unsigned int es;
+    unsigned int cs;
+    unsigned int ss;
+    unsigned int ds;
+    unsigned int fs;
+    unsigned int gs;
+    unsigned int ldt;
+    unsigned short trap;
+    unsigned short iomap_base;
+} __attribute__((packed)) tss_entry_struct;
 
 // initializes GDT
 int __init_gdt();

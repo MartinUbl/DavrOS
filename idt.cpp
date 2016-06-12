@@ -2,6 +2,8 @@
 #include "idt.h"
 #include "support.h"
 #include "console.h"
+#include "irq_handlers.h"
+#include "syscalls.h"
 
 // global IDT table
 static idt_descriptor __idt[MAX_INTERRUPTS];
@@ -12,7 +14,6 @@ static idtr __idtr;
 static void __default_int_handler_null()
 {
     Console::WriteLn("Unhandled interrupt");
-
     halt();
 }
 
@@ -36,7 +37,7 @@ static void __install_interrupt_handler(unsigned int i, unsigned short flags, un
 
 void __use_interrupt_handler(unsigned int i, int_handler handler)
 {
-    __install_interrupt_handler(i, I86_IDT_DESC_PRESENT | I86_IDT_DESC_BIT32, 0x08, handler);
+    __install_interrupt_handler(i, I86_IDT_DESC_PRESENT | I86_IDT_DESC_BIT32 | I86_IDT_DESC_RING3, 0x08, handler);
 }
 
 int __init_idt()
@@ -53,7 +54,10 @@ int __init_idt()
 
     // register default handlers
     for (i = 0; i < MAX_INTERRUPTS; i++)
-        __install_interrupt_handler(i, I86_IDT_DESC_PRESENT | I86_IDT_DESC_BIT32, 0x08, (int_handler)__default_int_handler_null);
+        __install_interrupt_handler(i, I86_IDT_DESC_PRESENT | I86_IDT_DESC_BIT32 | I86_IDT_DESC_RING3, 0x08, (int_handler)__default_int_handler_null);
+
+    // hook syscall interrupt (int 80h)
+    __install_interrupt_handler(0x80, I86_IDT_DESC_PRESENT | I86_IDT_DESC_BIT32 | I86_IDT_DESC_RING3, 0x08, (int_handler)syscall_int_handler);
 
     // load IDT into memory
     load_idt((unsigned int)&__idtr);

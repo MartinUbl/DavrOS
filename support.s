@@ -7,6 +7,7 @@ global get_kernel_physical_end
 global cpuinfo_load_vendor
 global load_gdt
 global load_idt
+global flush_tss
 global int_disable
 global int_enable
 global flushtlb
@@ -95,6 +96,15 @@ init_data_sp:
 load_idt:
     mov eax, [esp + 4]      ; move IDTR address to eax
     lidt [eax]              ; load the address
+    ret                     ; return back
+
+
+; flush_tss - flushes TSS segment
+; stack: [esp + 4] segment to use
+;        [esp    ] return address
+flush_tss:
+    mov eax, [esp + 4]      ; move IDTR address to eax
+    ltr ax                  ; load the address
     ret                     ; return back
 
 

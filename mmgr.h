@@ -82,6 +82,18 @@ class MemoryManager
         // frees memory block
         void mem_free(void* addr);
 
+        // allocates new page directory (in physical memory => returns value for cr3)
+        page_directory CreatePageDirectory(bool userspace, page_directory* kernel_mapping);
+        // allocates stack page to be used, and returns virtual memory accessible from userspace
+        virtual_memory AllocStackPage(page_directory kernel_mapping);
+        // allocates code page to be used, and returns virtual memory accessible from userspace
+        virtual_memory AllocCodePage(page_directory kernel_mapping, void* use_memory);
+
+        // sets page directory for memory to be allocated on
+        void SetPageDirectory(page_directory cr3);
+        // restores original page directory (kernel)
+        void RestorePageDirectory();
+
     protected:
         // marks physical block as used
         void SetPhysBitmapBit(uint32_t bit);
